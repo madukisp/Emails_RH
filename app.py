@@ -5,7 +5,7 @@ from pathlib import Path
 
 # --- CONFIGURAÇÃO DA PÁGINA ---
 st.set_page_config(
-    page_title="RH - Processo de Admissão", page_icon="🦷", layout="wide"
+    page_title="RH - Processo de Admissão", page_icon="📩", layout="wide"
 )
 
 
@@ -45,7 +45,7 @@ cargos = carregar_json("cargos.json")
 unidades = carregar_json("unidades.json")
 
 # --- INTERFACE ---
-st.title("🦷 Disparador de Admissão SBCD")
+st.title("📩 Disparador de Admissão SBCD")
 st.markdown("Preencha os dados abaixo para gerar o texto do e-mail de aprovação.")
 
 st.divider()
@@ -55,9 +55,7 @@ col1, col2 = st.columns(2)
 
 with col1:
     st.subheader("👤 Dados do Candidato")
-    nome_candidato = st.text_input(
-        "Nome Completo", placeholder="Ex: Evelyn Santos de Oliveira"
-    )
+    nome_candidato = st.text_input("Nome Completo", placeholder="Ex: Maria da Silva")
     email_candidato = st.text_input("E-mail", placeholder="candidato@email.com")
     cargo = st.selectbox("Cargo", cargos)
 
@@ -65,7 +63,9 @@ with col2:
     st.subheader("📍 Dados da Vaga")
     unidade = st.selectbox("Unidade", list(unidades.keys()))
     salario = st.text_input("Salário Bruto", value="R$ 3.429,74")
-    data_inicio = st.date_input("Data de Início", value=date.today())
+    data_inicio = st.date_input(
+        "Data de Início", value=date.today(), format="DD/MM/YYYY"
+    )
 
 st.divider()
 
@@ -103,16 +103,19 @@ enviar_voucher = st.checkbox(
 st.divider()
 st.subheader("📧 Texto do E-mail Gerado")
 
-if nome_candidato and email_candidato:
-    # Dados da unidade
-    endereco = unidades[unidade]["endereco"]
-    voucher = unidades[unidade]["voucher"]
+# Dados da unidade selecionada
+if unidade and unidade in unidades:
+    endereco = unidades[unidade].get("endereco", "Endereço a definir")
+    voucher = unidades[unidade].get("voucher", "")
+else:
+    endereco = "Endereço a definir"
+    voucher = ""
 
-    # Primeiro nome para saudação
-    primeiro_nome = nome_candidato.split()[0]
+# Primeiro nome para saudação (ou placeholder se vazio)
+primeiro_nome = nome_candidato.split()[0] if nome_candidato else "[Nome]"
 
-    # --- CORPO DO EMAIL BASE ---
-    corpo_email = f"""{primeiro_nome}, boa tarde! Espero que esteja bem.
+# --- CORPO DO EMAIL BASE ---
+corpo_email = f"""{primeiro_nome}, boa tarde! Espero que esteja bem.
 
 Parabéns! Você foi aprovado(a) para a vaga de {cargo} na unidade {unidade}.
 
@@ -151,9 +154,9 @@ Obrigatória apresentação do comprovante vacinal com as doses conforme esquema
 Os documentos obrigatórios deverão ser enviados por meio do sistema (online), através de um link que você receberá em breve.
 """
 
-    # --- SEÇÃO SAFEWEB (SE NECESSÁRIO) ---
-    if enviar_voucher:
-        corpo_email += f"""
+# --- SEÇÃO SAFEWEB (SE NECESSÁRIO) ---
+if enviar_voucher:
+    corpo_email += f"""
 ---
 
 🔐 CADASTRO SAFE WEB - ASSINATURA DIGITAL
@@ -174,8 +177,8 @@ Assim que você concluir o agendamento e a efetivação do seu cadastro na plata
 Essas informações são essenciais para suas ações diárias na unidade de trabalho.
 """
 
-    # --- RODAPÉ ---
-    corpo_email += """
+# --- RODAPÉ ---
+corpo_email += """
 ---
 
 Para que possamos melhorar os processos de Recrutamento e Seleção, pedimos que preencha a Pesquisa de Satisfação no link: https://forms.office.com/r/EVb3ZQhe7C
@@ -184,46 +187,54 @@ Atenciosamente,
 Recursos Humanos SBCD - Recrutamento e Seleção
 """
 
-    # --- EXIBIR EMAIL ---
-    st.text_area("Preview do E-mail:", value=corpo_email, height=400)
+# --- EXIBIR EMAIL ---
+st.text_area("Preview do E-mail:", value=corpo_email, height=400)
 
-    # --- BOTÃO ÚNICO: COPIAR E SALVAR ---
-    if st.button("📋 Copiar Texto do E-mail", type="primary", use_container_width=True):
-        # Preparar dados para salvar
-        dados_candidato = {
-            "nome": nome_candidato,
-            "email": email_candidato,
-            "cargo": cargo,
-            "unidade": unidade,
-            "salario": salario,
-            "data_inicio": data_inicio.strftime("%Y-%m-%d"),
-            "beneficios": {
-                "vale_alimentacao": vale_alimentacao,
-                "vale_refeicao": vale_refeicao,
-            },
-            "certificacao_safeweb": enviar_voucher,
-        }
+# --- BOTÃO ÚNICO: COPIAR E SALVAR ---
+# Só habilita o botão se tiver nome e email
+botao_habilitado = bool(nome_candidato and email_candidato)
 
-        # Tentar salvar (só salva se não existir)
-        foi_salvo = salvar_candidato(dados_candidato)
+if not botao_habilitado:
+    st.warning("⚠️ Preencha o nome e e-mail do candidato para salvar e copiar o texto.")
 
-        # Feedback visual
-        if foi_salvo:
-            st.success(f"✅ Candidato {nome_candidato} salvo com sucesso!")
+if st.button(
+    "📋 Copiar Texto do E-mail",
+    type="primary",
+    use_container_width=True,
+    disabled=not botao_habilitado,
+):
+    # Preparar dados para salvar
+    dados_candidato = {
+        "nome": nome_candidato,
+        "email": email_candidato,
+        "cargo": cargo,
+        "unidade": unidade,
+        "salario": salario,
+        "data_inicio": data_inicio.strftime("%Y-%m-%d"),
+        "beneficios": {
+            "vale_alimentacao": vale_alimentacao,
+            "vale_refeicao": vale_refeicao,
+        },
+        "certificacao_safeweb": enviar_voucher,
+    }
 
-        st.info("📋 Texto copiado! Cole no corpo do e-mail.")
+    # Tentar salvar (só salva se não existir)
+    foi_salvo = salvar_candidato(dados_candidato)
 
-        # Copiar para área de transferência (via download)
-        st.download_button(
-            label="💾 Baixar como arquivo .txt",
-            data=corpo_email,
-            file_name=f"email_admissao_{nome_candidato.replace(' ', '_')}.txt",
-            mime="text/plain",
-            use_container_width=True,
-        )
+    # Feedback visual
+    if foi_salvo:
+        st.success(f"✅ Candidato {nome_candidato} salvo com sucesso!")
 
-else:
-    st.warning("⚠️ Preencha o nome e e-mail do candidato para gerar o texto do e-mail.")
+    st.info("📋 Texto copiado! Cole no corpo do e-mail.")
+
+    # Copiar para área de transferência (via download)
+    st.download_button(
+        label="💾 Baixar como arquivo .txt",
+        data=corpo_email,
+        file_name=f"email_admissao_{nome_candidato.replace(' ', '_')}.txt",
+        mime="text/plain",
+        use_container_width=True,
+    )
 
 # --- RODAPÉ ---
 st.divider()
